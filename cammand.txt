@@ -1,0 +1,11 @@
+ python -m venv .venv        
+ 
+ .venv\Scripts\Activate.ps1
+
+ uvicorn main:app --reload --port 5004     
+ 
+ Get-NetTCPConnection -LocalPort 5004 -State Listen | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }
+
+ pip freeze > requirements.txt
+
+ hypercorn==0.14.4

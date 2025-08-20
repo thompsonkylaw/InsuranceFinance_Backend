@@ -1,2 +1,6 @@
 fastapi==0.100.0
 hypercorn==0.14.4
+uvicorn[standard]
+pydantic
+selenium
+apscheduler
