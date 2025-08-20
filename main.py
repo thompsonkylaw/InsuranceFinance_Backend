@@ -21,71 +21,7 @@ from selenium.common.exceptions import TimeoutException
 # --- Basic Logging Configuration ---
 logging.basicConfig(level=logging.INFO)
 
-# --- FastAPI Lifespan and Scraping Logic ---
-# (This large section is unchanged and correct, so it is collapsed for brevity)
-# ...
-# ---
-
-# --- Create FastAPI App ---
-app = FastAPI(lifespan=lifespan) # The lifespan function is defined in the collapsed section
-
-# =================== FIX IMPLEMENTED HERE ===================
-# --- CORS Configuration ---
-# Allow all origins by using the wildcard "*"
-# This will permit your deployed frontend to access the backend.
-origins = ["*"]
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
-    allow_methods=["*"],  # Allows all methods
-    allow_headers=["*"],  # Allows all headers
-)
-# =============================================================
-
-# --- Pydantic Models (Collapsed for brevity) ---
-# ...
-
-# --- Helper function (Collapsed for brevity) ---
-# ...
-
-# --- Main Scraping Logic (Collapsed for brevity) ---
-async def scrape_and_cache_rates():
-    # ... This function remains the same ...
-    pass
-
-# --- API Endpoint ---
-@app.get("/get-rates", response_model=RatesResponse)
-async def get_rates():
-    """Instantly returns the cached bank rate data."""
-    if not hasattr(app.state, 'rates') or not app.state.rates:
-        # Provide a default response if the first scrape isn't finished yet
-        return {"primeRate": [{"bankName": "天星銀行", "primeRateValue": "Loading...", "bankUpdateDate": "Loading..."}, {"bankName": "華僑永亨", "primeRateValue": "Loading...", "bankUpdateDate": "Loading..."}, {"bankName": "工商銀行", "primeRateValue": "Loading...", "bankUpdateDate": "Loading..."}], "HIBOR": {"HIBOR_value": "Loading...", "lastUpdateDate": "Loading..."}}
-    return app.state.rates
-
-# (You need the full code in your file, this is just showing the changed part)
-# To make it easy, here is the full file again:
-# -----------------------------------------------------------------------------
-
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from typing import List
-import logging
-import re
-import time
-from contextlib import asynccontextmanager
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import TimeoutException
-
-logging.basicConfig(level=logging.INFO)
-
+# --- Pydantic Models for Data Structure ---
 class PrimeRateItem(BaseModel):
     bankName: str
     primeRateValue: str
@@ -99,15 +35,23 @@ class RatesResponse(BaseModel):
     primeRate: List[PrimeRateItem]
     HIBOR: HiborItem
 
+# --- Helper function to format rates ---
 def format_rate(rate_str: str) -> str:
+    """Converts a rate string to a float, rounds to 2 decimal places, and returns as a string."""
     try:
-        return f"{float(rate_str):.2f}"
+        rate_float = float(rate_str)
+        return f"{rate_float:.2f}"
     except (ValueError, TypeError):
         return rate_str
 
+# --- Main Scraping Logic ---
 async def scrape_and_cache_rates():
+    """
+    This function contains all scraping logic. It's called on startup and periodically.
+    """
     logging.info("Starting scheduled scraping process...")
     remote_webdriver_url = "https://standalone-chrome-production-57ca.up.railway.app"
+    
     chrome_options = Options()
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
@@ -120,14 +64,23 @@ async def scrape_and_cache_rates():
         logging.info(f"Connecting to remote WebDriver at {remote_webdriver_url}...")
         driver = webdriver.Remote(command_executor=remote_webdriver_url, options=chrome_options)
         driver.set_page_load_timeout(30)
-        driver.set_window_size(1920, 1080)
+        driver.set_window_size(1920, 1080) # Set window size once for all sites
         logging.info("Successfully connected to remote WebDriver.")
 
-        prime_rate_data = [{"bankName": "天星銀行", "primeRateValue": "N/A", "bankUpdateDate": "N/A"}, {"bankName": "華僑永亨", "primeRateValue": "N/A", "bankUpdateDate": "N/A"}, {"bankName": "工商銀行", "primeRateValue": "N/A", "bankUpdateDate": "N/A"}]
+        prime_rate_data = [
+            {"bankName": "天星銀行", "primeRateValue": "N/A", "bankUpdateDate": "N/A"},
+            {"bankName": "華僑永亨", "primeRateValue": "N/A", "bankUpdateDate": "N/A"},
+            {"bankName": "工商銀行", "primeRateValue": "N/A", "bankUpdateDate": "N/A"},
+        ]
         hibor_data = {"HIBOR_value": "N/A", "lastUpdateDate": "N/A"}
-        url_map = {"天星銀行": "https://www.airstarbank.com/zh-hk/hkprime", "華僑永亨": "https://www.ocbc.com.hk/whb/action/rate/whbRate.do?id=prime_lending_rate&locale=en-us", "工商銀行": "https://www.icbcasia.com/hk/en/personal/banking/rate/prime-rate/default.html"}
+        url_map = {
+            "天星銀行": "https://www.airstarbank.com/zh-hk/hkprime",
+            "華僑永亨": "https://www.ocbc.com.hk/whb/action/rate/whbRate.do?id=prime_lending_rate&locale=en-us",
+            "工商銀行": "https://www.icbcasia.com/hk/en/personal/banking/rate/prime-rate/default.html"
+        }
         hibor_url = "https://www.hsbc.com.hk/zh-hk/mortgages/tools/hibor-rate/"
 
+        # --- Scraping Prime Rates ---
         for rate_item in prime_rate_data:
             bank_name = rate_item["bankName"]
             if bank_name not in url_map: continue
@@ -145,6 +98,7 @@ async def scrape_and_cache_rates():
                     formatted_date = f"{match.group(3)}-{match.group(2)}-{match.group(1)}" if match else "N/A"
                     rate_item.update({"primeRateValue": cleaned_rate, "bankUpdateDate": formatted_date})
                 except Exception as e: logging.error(f"Scraping error for {bank_name}: {e}")
+            
             elif bank_name == "華僑永亨":
                 try:
                     wait = WebDriverWait(driver, 15)
@@ -156,6 +110,7 @@ async def scrape_and_cache_rates():
                     cleaned_rate = format_rate(rate_element.text)
                     rate_item.update({"primeRateValue": cleaned_rate, "bankUpdateDate": formatted_date})
                 except Exception as e: logging.error(f"Scraping error for {bank_name}: {e}")
+
             elif bank_name == "工商銀行":
                 try:
                     wait = WebDriverWait(driver, 15)
@@ -171,6 +126,7 @@ async def scrape_and_cache_rates():
                     rate_item.update({"primeRateValue": cleaned_rate, "bankUpdateDate": formatted_date})
                 except Exception as e: logging.error(f"Scraping error for {bank_name}: {e}")
         
+        # --- Scraping HIBOR Rate ---
         logging.info(f"Navigating to {hibor_url} for HIBOR...")
         driver.get(hibor_url)
         try:
@@ -183,9 +139,11 @@ async def scrape_and_cache_rates():
             
             rate_selector = "div.hibor_rate_table table.desktop tbody tr:first-child td:nth-child(2)"
             wait.until(EC.text_to_be_present_in_element((By.CSS_SELECTOR, rate_selector), "%"))
+            
             table_selector = "div.hibor_rate_table table.desktop"
             year_selector = f"{table_selector} thead th:first-child"
             date_selector = f"{table_selector} tbody tr:first-child td:first-child"
+            
             year = re.search(r'\d{4}', driver.find_element(By.CSS_SELECTOR, year_selector).text).group(0)
             date_parts = re.findall(r'\d+', driver.find_element(By.CSS_SELECTOR, date_selector).text)
             formatted_date = f"{year}-{int(date_parts[0]):02d}-{int(date_parts[1]):02d}" if len(date_parts) == 2 else "N/A"
@@ -195,6 +153,7 @@ async def scrape_and_cache_rates():
 
         app.state.rates = {"primeRate": prime_rate_data, "HIBOR": hibor_data}
         logging.info(f"Scraping process finished. Cached data: {app.state.rates}")
+
     except Exception as e:
         logging.error(f"A top-level error occurred during web scraping: {e}")
     finally:
@@ -216,6 +175,11 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
+# origins = [
+#     "http://localhost",
+#     "http://localhost:3000",
+#     "http://localhost:5173", # Add other frontend ports if needed
+# ]
 origins = ["*"]
 app.add_middleware(
     CORSMiddleware,
@@ -227,6 +191,7 @@ app.add_middleware(
 
 @app.get("/get-rates", response_model=RatesResponse)
 async def get_rates():
-    if not hasattr(app.state, 'rates') or not app.state.rates:
+    """Instantly returns the cached bank rate data."""
+    if not app.state.rates:
         return {"primeRate": [{"bankName": "天星銀行", "primeRateValue": "Loading...", "bankUpdateDate": "Loading..."}, {"bankName": "華僑永亨", "primeRateValue": "Loading...", "bankUpdateDate": "Loading..."}, {"bankName": "工商銀行", "primeRateValue": "Loading...", "bankUpdateDate": "Loading..."}], "HIBOR": {"HIBOR_value": "Loading...", "lastUpdateDate": "Loading..."}}
     return app.state.rates
