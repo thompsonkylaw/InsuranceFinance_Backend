@@ -70,13 +70,13 @@ async def scrape_and_cache_rates():
         prime_rate_data = [
             {"bankName": "天星銀行", "primeRateValue": "N/A", "bankUpdateDate": "N/A"},
             {"bankName": "華僑永亨", "primeRateValue": "N/A", "bankUpdateDate": "N/A"},
-            {"bankName": "工商銀行", "primeRateValue": "N/A", "bankUpdateDate": "N/A"},
+            {"bankName": "工銀亞洲", "primeRateValue": "N/A", "bankUpdateDate": "N/A"},
         ]
         hibor_data = {"HIBOR_value": "N/A", "lastUpdateDate": "N/A"}
         url_map = {
             "天星銀行": "https://www.airstarbank.com/zh-hk/hkprime",
             "華僑永亨": "https://www.ocbc.com.hk/whb/action/rate/whbRate.do?id=prime_lending_rate&locale=en-us",
-            "工商銀行": "https://www.icbcasia.com/hk/en/personal/banking/rate/prime-rate/default.html"
+            "工銀亞洲": "https://www.icbcasia.com/hk/en/personal/banking/rate/prime-rate/default.html"
         }
         hibor_url = "https://www.hsbc.com.hk/zh-hk/mortgages/tools/hibor-rate/"
 
@@ -111,7 +111,7 @@ async def scrape_and_cache_rates():
                     rate_item.update({"primeRateValue": cleaned_rate, "bankUpdateDate": formatted_date})
                 except Exception as e: logging.error(f"Scraping error for {bank_name}: {e}")
 
-            elif bank_name == "工商銀行":
+            elif bank_name == "工銀亞洲":
                 try:
                     wait = WebDriverWait(driver, 15)
                     date_id = "asiaHKDInterestRateTimea64b116132c2e18a646eed8bc7102769"
@@ -193,5 +193,5 @@ app.add_middleware(
 async def get_rates():
     """Instantly returns the cached bank rate data."""
     if not app.state.rates:
-        return {"primeRate": [{"bankName": "天星銀行", "primeRateValue": "Loading...", "bankUpdateDate": "Loading..."}, {"bankName": "華僑永亨", "primeRateValue": "Loading...", "bankUpdateDate": "Loading..."}, {"bankName": "工商銀行", "primeRateValue": "Loading...", "bankUpdateDate": "Loading..."}], "HIBOR": {"HIBOR_value": "Loading...", "lastUpdateDate": "Loading..."}}
+        return {"primeRate": [{"bankName": "天星銀行", "primeRateValue": "Loading...", "bankUpdateDate": "Loading..."}, {"bankName": "華僑永亨", "primeRateValue": "Loading...", "bankUpdateDate": "Loading..."}, {"bankName": "工銀亞洲", "primeRateValue": "Loading...", "bankUpdateDate": "Loading..."}], "HIBOR": {"HIBOR_value": "Loading...", "lastUpdateDate": "Loading..."}}
     return app.state.rates
